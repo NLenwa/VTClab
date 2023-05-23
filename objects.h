@@ -4,6 +4,9 @@
 
 #define PI 3.1416
 extern class Terrain;
+extern void SetPartnerVal(int resource);
+extern int GetResEnum();
+
 
 struct ObjectState
 {
@@ -66,11 +69,12 @@ public:
 	long number_of_renewed_item;
 
 
+
 	float time_of_simulation;     // czas sumaryczny symulacji obiektu   
-	Terrain *terrain;             // wskaŸnik do terrainu, do którego przypisany jest obiekt
+	Terrain* terrain;             // wskaŸnik do terrainu, do którego przypisany jest obiekt
 
 public:
-	MovableObject(Terrain *t);          // konstruktor
+	MovableObject(Terrain* t);          // konstruktor
 	~MovableObject();
 	void ChangeState(ObjectState __state);          // zmiana stanu obiektu
 	ObjectState State();        // metoda zwracajaca state obiektu
@@ -83,7 +87,9 @@ enum ItemTypes { ITEM_COIN, ITEM_BARREL, ITEM_TREE, ITEM_BUILDING, ITEM_POINT, I
 //char *PRZ_nazwy[] = { "moneta", "beczka", "drzewo", "punkt", "krawedz", "miejsce startowe", "mur", "bramka" };
 enum TreeSubtypes { TREE_POPLAR, TREE_SPRUCE, TREE_BAOBAB, TREE_FANTAZJA };
 //char *DRZ_nazwy[] = { "topola", "swierk", "baobab", "fantazja" };
-enum PointSubtypes {PUN_ZWYKLY, PUN_KRAWEDZI, PUN_WODY};
+enum PointSubtypes { PUN_ZWYKLY, PUN_KRAWEDZI, PUN_WODY };
+
+
 
 struct Item
 {
@@ -108,7 +114,7 @@ struct Item
 	bool if_renewable;      // czy mo¿e siê odnawiaæ w tym samym miejscu po pewnym czasie
 	long taking_time;        // czas wziêcia (potrzebny do przywrócenia)
 
-	
+
 	unsigned long display_number;   // zgodny z liczba wyœwietleñ po to, by nie powtarzaæ rysowania przedmiotów
 };
 
@@ -124,19 +130,19 @@ public:
 	long w, k;                    // wiersz i kolumna okreœlaj¹ce po³o¿enie obszaru na nieograniczonej p³aszczyŸnie
 	int liczba_oczek;             // liczba oczek na mapie w poziomie i pionie (potêga dwójki!) 
 	//float sector_size;        // potrzebny do obliczenia normalnych
-	Item **wp;               // jednowymiarowa tablica wskaŸników do przedmiotów znajduj¹cych siê w pewnym obszarze
+	Item** wp;               // jednowymiarowa tablica wskaŸników do przedmiotów znajduj¹cych siê w pewnym obszarze
 	long number_of_items;      // liczba przedmiotów w obszarze 
 	long number_of_items_max;  // size tablicy przedmiotów z przydzielon¹ pamiêci¹
 
-	float **mapa_wysokosci;         // wysokoœci wierzcho³ków
-	int **typy_naw;                 // typy nawierzchni
-	float **poziom_wody;            // poziom wody w ka¿dym oczku 
-	Vector3 ****Norm;                // wektory normalne do poszczególnych p³aszczyzn (rozdzielczoœæ x wiersz x kolumna x 4 p³aszczyzny);
+	float** mapa_wysokosci;         // wysokoœci wierzcho³ków
+	int** typy_naw;                 // typy nawierzchni
+	float** poziom_wody;            // poziom wody w ka¿dym oczku 
+	Vector3**** Norm;                // wektory normalne do poszczególnych p³aszczyzn (rozdzielczoœæ x wiersz x kolumna x 4 p³aszczyzny);
 
-	float **mapa_wysokosci_edycja;    // mapa w trakcie edycji - powinna byæ widoczna ³¹cznie z dotychczasow¹ map¹
-	Vector3 ****Norm_edycja;   
-	int **typy_naw_edycja;
-	float **poziom_wody_edycja;
+	float** mapa_wysokosci_edycja;    // mapa w trakcie edycji - powinna byæ widoczna ³¹cznie z dotychczasow¹ map¹
+	Vector3**** Norm_edycja;
+	int** typy_naw_edycja;
+	float** poziom_wody_edycja;
 	int liczba_oczek_edycja;
 
 	// podstawowe w³aœciwoœci dla ca³ego sektora, gdyby nie by³o mapy
@@ -144,33 +150,33 @@ public:
 	float wysokosc_gruntu_sek;
 	float poziom_wody_sek;
 
-	MovableObject **wob;                          // tablica obiektów ruchomych, które mog¹ znaleŸæ siê w obszarze w ci¹gu
+	MovableObject** wob;                          // tablica obiektów ruchomych, które mog¹ znaleŸæ siê w obszarze w ci¹gu
 	// kroku czasowego symulacji (np. obiekty b. szybkie mog¹ znaleŸæ siê w wielu obszarach)
 	long liczba_obiektow_ruch;
 	long liczba_obiektow_ruch_max;
 
 	float wysokosc_max;             // maksymalna wysokoœæ terrainu w sektorze -> istotna dla wyznaczenia rozdzielczoœci np. przy widoku z góry
 	int liczba_oczek_wyswietlana;   // liczba oczek (rozdzielczoœæ) aktualnie wyœwietlana, w zal. od niej mo¿na dopasowaæ s¹siednie sektory
-	                                // by nie by³o dziur
+	// by nie by³o dziur
 	int liczba_oczek_wyswietlana_pop;  // poprzednia liczba oczek, by uzyskaæ pa³ne dopasowanie rozdzielczoœci s¹siaduj¹cych sektorów 
 	//float radius;                // radius sektora zwykle d³ugoœæ po³owy przek¹tnej kwadratu, mo¿e byæ wiêkszy, gdy w
-	                              // œrodku du¿e ró¿nice wysokoœci lub du¿e przedmioty lub obiekty
+								  // œrodku du¿e ró¿nice wysokoœci lub du¿e przedmioty lub obiekty
 
-	Sektor(){};
+	Sektor() {};
 	Sektor(int _loczek, long _w, long _k, bool czy_mapa);
 	~Sektor();
-	void pamiec_dla_mapy(int __liczba_oczek, bool czy_edycja=0);
+	void pamiec_dla_mapy(int __liczba_oczek, bool czy_edycja = 0);
 	void zwolnij_pamiec_dla_mapy(bool czy_edycja = 0);
-	void wstaw_przedmiot(Item *p);
-	void usun_przedmiot(Item *p);
-	void wstaw_obiekt_ruchomy(MovableObject *o);
-	void usun_obiekt_ruchomy(MovableObject *o);
-	void oblicz_normalne(float sector_size, bool czy_edycja=0);         // obliczenie wektorów normalnych N do p³aszczyzn trójk¹tów, by nie robiæ tego ka¿dorazowo przy odrysowywaniu   
+	void wstaw_przedmiot(Item* p);
+	void usun_przedmiot(Item* p);
+	void wstaw_obiekt_ruchomy(MovableObject* o);
+	void usun_obiekt_ruchomy(MovableObject* o);
+	void oblicz_normalne(float sector_size, bool czy_edycja = 0);         // obliczenie wektorów normalnych N do p³aszczyzn trójk¹tów, by nie robiæ tego ka¿dorazowo przy odrysowywaniu   
 };
 
 struct KomorkaTablicy  // komórka tablicy rozproszonej (te¿ mog³aby byæ tablic¹ rozproszon¹)
 {
-	Sektor **sektory;  // tablica wskaŸników do sektorów (mog¹ zdarzaæ siê konflikty -> w jednej komórce wiele sektorów) 
+	Sektor** sektory;  // tablica wskaŸników do sektorów (mog¹ zdarzaæ siê konflikty -> w jednej komórce wiele sektorów) 
 	long liczba_sektorow; // liczba sektorów w komórce
 	long rozmiar_pamieci; // liczba sektorów, dla której zarezerwowano pamiêæ
 };
@@ -182,7 +188,7 @@ public:
 	long liczba_komorek;                                 // liczba komórek tablicy
 	long ogolna_liczba_sektorow;
 	long w_min, w_max, k_min, k_max;                     // minimalne i maksymalne wspó³rzêdne sektorów (przyspieszaj¹ wyszukiwanie)  
-	KomorkaTablicy *komorki;
+	KomorkaTablicy* komorki;
 	unsigned long wyznacz_klucz(long w, long k);          // wyznaczanie indeksu komórki
 
 public:
@@ -190,9 +196,9 @@ public:
 	SectorsArray();        // na wejœciu konstruktora liczba komórek tablicy
 	~SectorsArray();
 
-	Sektor *znajdz(long w, long k);       // znajdowanie sektora (zwraca NULL jeœli nie znaleziono)
-	Sektor *wstaw(Sektor *s);              // wstawianie sektora do tablicy
-	void usun(Sektor *s);              // usuwanie sektora
+	Sektor* znajdz(long w, long k);       // znajdowanie sektora (zwraca NULL jeœli nie znaleziono)
+	Sektor* wstaw(Sektor* s);              // wstawianie sektora do tablicy
+	void usun(Sektor* s);              // usuwanie sektora
 };
 
 struct FoldParams
@@ -214,56 +220,56 @@ struct FoldParams
 class Terrain
 {
 public:
-	void InsertItemIntoSectors(Item *prz);
-	void DeleteItemFromSectors(Item *prz);
+	void InsertItemIntoSectors(Item* prz);
+	void DeleteItemFromSectors(Item* prz);
 public:
 
 	long number_of_items;      // liczba przedmiotów na planszy
 	long number_of_items_max;  // size tablicy przedmiotów
 
-	SectorsArray *ts;
+	SectorsArray* ts;
 
-	
+
 
 	// inne istotne w³aœciwoœci terrainu:
 	float sector_size;        // w [m] zamiast rozmiaru pola
 	float time_of_item_renewing;     // czas w [s] po którym nastêpuje odnowienie siê przedmiotu 
 	bool if_toroidal_world;        // inaczej cyklicznosc -> po dojsciu do granicy przeskakujemy na
-	                              // pocz¹tek terrainu, zarówno w pionie, jak i w poziomie (gdy nie ma granicy, terrain nie mo¿e byæ cykliczny!)
+	// pocz¹tek terrainu, zarówno w pionie, jak i w poziomie (gdy nie ma granicy, terrain nie mo¿e byæ cykliczny!)
 	float border_x, border_z;   // granica terrainu (jeœli -1 - terrain nieskoñczenie wielki)
 
 	// parametry wyœwietlania:
 	float detail_level;                 // stopieñ szczegó³owoœci w przedziale 0,1 
 	unsigned long number_of_displays;   // potrzebne do unikania podwójnego rysowania przedmiotów
-	long *selected_items;     // tablica numerów zaznaczonych przedmiotów (dodatkowo ka¿dy przedmiot posiada pole z informacj¹ o zaznaczeniu)
+	long* selected_items;     // tablica numerów zaznaczonych przedmiotów (dodatkowo ka¿dy przedmiot posiada pole z informacj¹ o zaznaczeniu)
 	long number_of_selected_items,      // liczba aktualnie zaznaczonych przedmiotów
 		number_of_selected_items_max;   // liczba miejsc w tablicy 
 
 	FoldParams pf_rej[10];        // parametry edycji fa³d (s¹ tu tylko ze wzglêdu na koniecznoœæ zapisu do pliku
 
-	Item *p;          // tablica przedmiotow roznego typu
+	Item* p;          // tablica przedmiotow roznego typu
 
 	Terrain();
 	~Terrain();
 	float GroundHeight(float x, float z);      // okreœlanie wysokoœci gruntu dla punktu o wsp. (x,z)
-	float ItemPointHeight(Vector3 pol, Item *prz); // wysokoœæ na jakiej znajdzie siê przeciêcie pionowej linii przech. przez pol na górnej powierzchni przedmiotu
+	float ItemPointHeight(Vector3 pol, Item* prz); // wysokoœæ na jakiej znajdzie siê przeciêcie pionowej linii przech. przez pol na górnej powierzchni przedmiotu
 	float height(Vector3 pol);                 // okreœlenie wysokoœci nad najbli¿szym przedmiotem lub gruntem patrz¹c w dó³ od punktu pol
-	void SectorCoordinates(long *w, long *k, float x, float z);  // na podstawie wsp. po³o¿enia punktu (x,z) zwraca wsp. sektora 
-	void SectorBeginPosition(float *x, float *z, long w, long k); // na podstawie wspó³rzêdnych sektora (w,k) zwraca po³o¿enie punktu pocz¹tkowego
+	void SectorCoordinates(long* w, long* k, float x, float z);  // na podstawie wsp. po³o¿enia punktu (x,z) zwraca wsp. sektora 
+	void SectorBeginPosition(float* x, float* z, long w, long k); // na podstawie wspó³rzêdnych sektora (w,k) zwraca po³o¿enie punktu pocz¹tkowego
 	float HighestSelectedItemHeight(Vector3 pol);
 	Vector3 Cursor3D_CoordinatesWithoutParallax(int X, int Y);
 	void DrawObject();	      // odrysowywanie terrainu 
 	void GraphicsInitialization();               // tworzenie listy wyœwietlania
 	int SaveMapToFile(char filename[]);        // SaveMapToFile mapy w pliku o podanej nazwie
 	int OpenMapFromFile(char filename[]);       // OpenMapFromFile mapy z pliku
-	void PlaceItemInTerrain(Item *prz);     // m.i. ustalenie wysokoœci, na której le¿y przedmiot w zal. od ukszta³t. terrainu
+	void PlaceItemInTerrain(Item* prz);     // m.i. ustalenie wysokoœci, na której le¿y przedmiot w zal. od ukszta³t. terrainu
 	long InsertItemToArrays(Item prz);   // wstawia przedmiot do tablic, zwraca numer przedmiotu w tablicy p[]
 	void SelectUnselectItemOrGroup(long nr_prz);// wpisywanie w pole ¿e jest zaznaczony lub nie, dodawanie/usuwanie do/z listy zaznaczonych 
 	void DeleteSelectItems();
 	void NewMap();                      // tworzenie nowej mapy (zwolnienie pamiêci dla starej)
-	
+
 	long ItemsInRadius(Item*** wsk_prz, Vector3 pol, float radius);
-	void InsertObjectIntoSectors(MovableObject *ob);
-	void DeleteObjectsFromSectors(MovableObject *ob);
+	void InsertObjectIntoSectors(MovableObject* ob);
+	void DeleteObjectsFromSectors(MovableObject* ob);
 	long ObjectsInRadius(MovableObject*** wsk_ob, Vector3 pol, float radius);
 };

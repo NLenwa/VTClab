@@ -12,6 +12,8 @@
 #include <gl\glu.h>
 #include <iterator> 
 #include <map>
+#include <string>
+#include <iostream>
 using namespace std;
 
 #include "objects.h"
@@ -19,12 +21,21 @@ using namespace std;
 #include "net.h"
 
 
+// Task 2.6 variables
+extern
+float half_item;			// half of picked item
+int partner = 0;			// partner ID
+int res_type;				// resource type to pick-up: 0- fuel, 1- money
+int partner_prop = 0;
+int my_res_type;
+bool partnered;
+
 bool if_different_skills = true;          // czy zró¿nicowanie umiejêtnoœci (dla ka¿dego pojazdu losowane s¹ umiejêtnoœci
 // zbierania gotówki i paliwa)
 
-FILE *f = fopen("WZR_log.txt", "w");     // plik do zapisu informacji testowych
+FILE* f = fopen("WZR_log.txt", "w");     // plik do zapisu informacji testowych
 
-MovableObject *my_vehicle;             // Object przypisany do tej aplikacji
+MovableObject* my_vehicle;             // Object przypisany do tej aplikacji
 
 Terrain terrain;
 map<int, MovableObject*> network_vehicles;
@@ -34,8 +45,8 @@ long VW_cycle_time, counter_of_simulations;     // zmienne pomocnicze potrzebne 
 long start_time = clock();          // czas od poczatku dzialania aplikacji  
 long group_existing_time = clock();    // czas od pocz¹tku istnienia grupy roboczej (czas od uruchom. pierwszej aplikacji)      
 
-multicast_net *multi_reciv;         // wsk do obiektu zajmujacego sie odbiorem komunikatow
-multicast_net *multi_send;          //   -||-  wysylaniem komunikatow
+multicast_net* multi_reciv;         // wsk do obiektu zajmujacego sie odbiorem komunikatow
+multicast_net* multi_send;          //   -||-  wysylaniem komunikatow
 
 HANDLE threadReciv;                 // uchwyt w¹tku odbioru komunikatów
 extern HWND main_window;
@@ -57,17 +68,17 @@ int cursor_x, cursor_y;                         // polo¿enie kursora myszki w c
 extern float TransferSending(int ID_receiver, int transfer_type, float transfer_value);
 
 enum frame_types {
-	OBJECT_STATE, ITEM_TAKING, ITEM_RENEWAL, COLLISION, TRANSFER
+	OBJECT_STATE, ITEM_TAKING, ITEM_RENEWAL, COLLISION, TRANSFER, PROPOSAL, ACCEPTED, DENY
 };
 
-enum transfer_types { MONEY, FUEL};
+enum transfer_types { MONEY, FUEL };
 
 struct Frame
 {
 	int iID;
 	int frame_type;
 	ObjectState state;
-	
+
 	int iID_receiver;      // nr ID adresata wiadomoœci (pozostali uczestnicy powinni wiadomoœæ zignorowaæ)
 
 	int item_number;     // nr przedmiotu, który zosta³ wziêty lub odzyskany
@@ -77,16 +88,71 @@ struct Frame
 	int transfer_type;        // gotówka, paliwo
 	float transfer_value;  // iloœæ gotówki lub paliwa 
 	int team_number;
+	bool accept;
 
 	long existing_time;        // czas jaki uplyn¹³ od uruchomienia programu
 };
 
+int ResourceChangeToEnum(int res)
+{
+	int resource;
+	if (res == 0) {
+		resource = FUEL;
+	}
+	else
+	{
+		resource = MONEY;
+	}
+	return resource;
+}
+
+void AcceptDeal(int ID, int prop)
+{
+	string message;
+	char text[128];
+	if (prop == 0)
+	{
+		sprintf(text, "%d : Do you want to accept role: FUEL", ID);
+	}
+	else
+	{
+		sprintf(text, "%d : Do you want to accept role: MONEY", ID);
+	}
+	int isOk = MessageBox(NULL, text, "Looking for partner...", MB_YESNO);
+	switch (isOk)
+	{
+	case IDYES:
+	{
+		Frame frame;
+		frame.iID_receiver = ID;
+		frame.accept = true;
+		frame.frame_type = ACCEPTED;
+		int size = multi_send->send((char*)&frame, sizeof(Frame));
+		my_res_type = prop;
+		my_res_type = ResourceChangeToEnum(my_res_type);
+		partnered = true;
+		partner = ID;
+		SetPartnerVal(my_res_type);
+		break;
+	}
+	case IDNO:
+	{
+		Frame frame;
+		frame.iID_receiver = ID;
+		frame.accept = false;
+		frame.frame_type = ACCEPTED;
+		int size = multi_send->send((char*)&frame, sizeof(Frame));
+		break;
+	}
+	}
+}
+
 
 //******************************************
 // Funkcja obs³ugi w¹tku odbioru komunikatów 
-DWORD WINAPI ReceiveThreadFunction(void *ptr)
+DWORD WINAPI ReceiveThreadFunction(void* ptr)
 {
-	multicast_net *pmt_net = (multicast_net*)ptr;  // wskaŸnik do obiektu klasy multicast_net
+	multicast_net* pmt_net = (multicast_net*)ptr;  // wskaŸnik do obiektu klasy multicast_net
 	int size;                                 // liczba bajtów ramki otrzymanej z sieci
 	Frame frame;
 	ObjectState state;
@@ -108,7 +174,7 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 
 				if ((network_vehicles.size() == 0) || (network_vehicles[frame.iID] == NULL))         // nie ma jeszcze takiego obiektu w tablicy -> trzeba go stworzyæ
 				{
-					MovableObject *ob = new MovableObject(&terrain);
+					MovableObject* ob = new MovableObject(&terrain);
 					ob->iID = frame.iID;
 					network_vehicles[frame.iID] = ob;
 					if (frame.existing_time > group_existing_time) group_existing_time = frame.existing_time;
@@ -133,7 +199,7 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 					network_vehicles[frame.iID]->ChangeState(state);   // aktualizacja stanu obiektu obcego 	
 					terrain.InsertObjectIntoSectors(network_vehicles[frame.iID]);
 				}
-				
+
 			}
 			break;
 		}
@@ -175,7 +241,38 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 			}
 			break;
 		}
-		
+		case PROPOSAL:
+		{
+			if (frame.iID_receiver == my_vehicle->iID)
+			{
+				int id = frame.iID;
+				int prop = frame.transfer_type;
+				AcceptDeal(id, prop);
+			}
+			break;
+		}
+		case ACCEPTED:
+		{
+			if (frame.iID_receiver == my_vehicle->iID)
+			{
+				int id = frame.iID;
+				bool accept = frame.accept;
+				if (accept)
+				{
+					partner = partner_prop;
+					partnered = true;
+					SetPartnerVal(my_res_type);
+
+				}
+			}
+			//		case DENY:
+			//			if (frame.iID_receiver == my_vehicle->iID)
+			//			{
+			//				partnered = false;
+			//				sprintf(par_view.inscription2, "End of partnership vehicle: %d", partner);
+			//				partner = 0;
+			//			}
+		}
 		} // switch po typach ramek
 		// Opuszczenie ścieżki krytycznej / Release the Critical section
 		LeaveCriticalSection(&m_cs);               // wyjście ze ścieżki krytycznej
@@ -205,10 +302,10 @@ void InteractionInitialisation()
 		NULL,                        // no security attributes
 		0,                           // use default stack size
 		ReceiveThreadFunction,       // thread function
-		(void *)multi_reciv,         // argument to thread function
+		(void*)multi_reciv,         // argument to thread function
 		0,                           // use default creation flags
 		&dwThreadId);                // returns the thread identifier
-		
+
 }
 
 
@@ -277,6 +374,16 @@ void VirtualWorldCycle()
 
 		sprintf(par_view.inscription2, "Wziecie_przedmiotu_o_wartosci_ %f", my_vehicle->taking_value);
 
+		int resource_taken = GetResEnum();
+
+		float resource_taken2 = resource_taken;
+
+		float transfer_res = my_vehicle->taking_value;
+
+		if (resource_taken == my_res_type && partnered)
+		{
+			TransferSending(partner, resource_taken2, transfer_res);
+		}
 		my_vehicle->number_of_taking_item = -1;
 		my_vehicle->taking_value = 0;
 	}
@@ -320,14 +427,29 @@ float TransferSending(int ID_receiver, int transfer_type, float transfer_value)
 	{
 		if (my_vehicle->state.money < transfer_value)
 			frame.transfer_value = my_vehicle->state.money;
-		my_vehicle->state.money -= frame.transfer_value;
+
+		if (partnered)
+		{
+			//my_vehicle->state.money -= frame.transfer_value;
+		}
+		else
+		{
+			my_vehicle->state.money -= frame.transfer_value;
+		}
 		sprintf(par_view.inscription2, "Przelew_sumy_ %f _na_rzecz_ID_ %d", transfer_value, ID_receiver);
 	}
 	else if (transfer_type == FUEL)
 	{
 		if (my_vehicle->state.amount_of_fuel < transfer_value)
 			frame.transfer_value = my_vehicle->state.amount_of_fuel;
-		my_vehicle->state.amount_of_fuel -= frame.transfer_value;
+		if (partnered)
+		{
+			//my_vehicle->state.money -= frame.transfer_value;
+		}
+		else
+		{
+			my_vehicle->state.money -= frame.transfer_value;
+		}
 		sprintf(par_view.inscription2, "Przekazanie_paliwa_w_ilosci_ %f _na_rzecz_ID_ %d", transfer_value, ID_receiver);
 	}
 
@@ -337,7 +459,90 @@ float TransferSending(int ID_receiver, int transfer_type, float transfer_value)
 	return frame.transfer_value;
 }
 
+void TransferProposal(int ID_receiver, int proposal)
+{
+	Frame frame;
+	frame.iID_receiver = ID_receiver;
+	frame.frame_type = PROPOSAL;
+	frame.iID = my_vehicle->iID;
+	frame.transfer_type = proposal;
 
+	int iSize = multi_send->send((char*)&frame, sizeof(Frame));
+}
+
+
+void SeekPartner()
+{
+	map<int, MovableObject>::iterator it;
+	for (auto const& x : network_vehicles)
+	{
+		string message;
+		char text[128];
+		int pID = x.first;
+		if (res_type == 0)
+		{
+			sprintf(text, "Do you want vehicle by ID: %d for FUEL role", pID);
+		}
+		else
+		{
+			sprintf(text, "Do you want vehicle by ID: %d for CASH role", pID);
+		}
+
+		int isOk = MessageBox(NULL, text, "Looking for partner...", MB_YESNOCANCEL);
+		switch (isOk)
+		{
+		case IDYES:
+		{
+			//call function to contact vehicle by ID
+			partner_prop = pID;
+			TransferProposal(pID, res_type);
+			goto exit_loop;
+		}
+		case IDNO:
+		{
+			break;
+		}
+		case IDCANCEL:
+		{
+			goto exit_loop;
+		}
+
+		}
+	}
+exit_loop:;
+}
+
+void Negotiation_Fuel()
+{
+	if (partner == 0)
+	{
+		my_res_type = 0;
+		my_res_type = ResourceChangeToEnum(my_res_type);
+		res_type = 1;
+		SeekPartner();
+	}
+}
+
+void Negotiation_Cash()
+{
+	if (partner == 0)
+	{
+		my_res_type = 1;
+		my_res_type = ResourceChangeToEnum(my_res_type);
+		res_type = 0;
+		SeekPartner();
+	}
+}
+
+//void EndPartnership()
+//{
+//	Frame frame;
+//	frame.frame_type = DENY;
+//	frame.iID_receiver = partner;
+//	frame.iID = my_vehicle->iID;
+//
+//	int deny = multi_send->send((char*)&frame, sizeof(Frame));
+//}
 
 
 
@@ -474,11 +679,11 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			{
 				if (it->second)
 				{
-					MovableObject *ob = it->second;
+					MovableObject* ob = it->second;
 					float xx, yy, zz;
 					ScreenCoordinates(&xx, &yy, &zz, ob->state.vPos);
 					yy = r.bottom - r.top - yy;
-					float odl_kw = (xx - x)*(xx - x) + (yy - y)*(yy - y);
+					float odl_kw = (xx - x) * (xx - x) + (yy - y) * (yy - y);
 					if (min_dist > odl_kw)
 					{
 						min_dist = odl_kw;
@@ -487,7 +692,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 					}
 				}
 			}
-		
+
 
 			// trzeba to przerobić na wersję sektorową, gdyż przedmiotów może być dużo!
 			// niestety nie jest to proste. 
@@ -507,7 +712,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 					placement = terrain.p[i].vPos;
 				ScreenCoordinates(&xx, &yy, &zz, placement);
 				yy = r.bottom - r.top - yy;
-				float odl_kw = (xx - x)*(xx - x) + (yy - y)*(yy - y);
+				float odl_kw = (xx - x) * (xx - x) + (yy - y) * (yy - y);
 				if (min_dist > odl_kw)
 				{
 					min_dist = odl_kw;
@@ -569,7 +774,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			float wheel_turn_angle = (float)(cursor_x - x) / 20;
 			if (wheel_turn_angle > 45) wheel_turn_angle = 45;
 			if (wheel_turn_angle < -45) wheel_turn_angle = -45;
-			my_vehicle->state.wheel_turn_angle = PI*wheel_turn_angle / 180;
+			my_vehicle->state.wheel_turn_angle = PI * wheel_turn_angle / 180;
 		}
 		break;
 	}
@@ -577,7 +782,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 	{
 		int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);  // dodatni do przodu, ujemny do ty³u
 		//fprintf(f,"zDelta = %d\n",zDelta);          // zwykle +-120, jak siê bardzo szybko zakrêci to czasmi wyjdzie +-240
-		if (zDelta > 0){
+		if (zDelta > 0) {
 			if (par_view.distance > 0.5) par_view.distance /= 1.2;
 			else par_view.distance = 0;
 		}
@@ -733,7 +938,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			{
 				if (it->second)
 				{
-					MovableObject *ob = it->second;
+					MovableObject* ob = it->second;
 					if (ob->if_selected)
 						float ilosc_p = TransferSending(ob->iID, FUEL, 10);
 				}
@@ -746,18 +951,41 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			{
 				if (it->second)
 				{
-					MovableObject *ob = it->second;
+					MovableObject* ob = it->second;
 					if (ob->if_selected)
 						float ilosc_p = TransferSending(ob->iID, MONEY, 100);
 				}
 			}
 			break;
 		}
-		
+
 		case 'L':     // rozpoczęcie zaznaczania metodą lasso
 			L_pressed = true;
 			break;
-	
+
+
+		case 'I':
+		{
+			Negotiation_Fuel();
+			break;
+		}
+
+		case 'U':
+		{
+			Negotiation_Cash();
+			break;
+		}
+		case 'K':
+		{
+			if (partnered)
+			{
+				partnered = false;
+				sprintf(par_view.inscription2, "End of partnership vehicle: %d", partner);
+				//EndPartnership();
+				partner = 0;
+			}
+			break;
+		}
 
 		} // switch po klawiszach
 
@@ -816,7 +1044,6 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			my_vehicle->if_keep_steer_wheel = false;
 			break;
 		}
-
 		}
 
 		break;
@@ -889,7 +1116,7 @@ LRESULT CALLBACK WndProc(HWND main_window, UINT message_type, WPARAM wParam, LPA
 			terrain_edition_mode = 1 - terrain_edition_mode;
 			if (terrain_edition_mode)
 				SetWindowText(main_window, "TRYB EDYCJI TERENU F2-SaveMapToFile, F1-pomoc");
-			else 
+			else
 				SetWindowText(main_window, "WYJSCIE Z TRYBU EDYCJI TERENU");
 			break;
 		}
