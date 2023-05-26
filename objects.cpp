@@ -39,6 +39,8 @@ char *PRZ_nazwy[32] = { "moneta", "beczka", "drzewo", "punkt", "krawedz" };
 //enum TreeSubtypes { TREE_POPLAR, TREE_SPRUCE, TREE_BAOBAB, TREE_FANTAZJA };
 char *DRZ_nazwy[32] = { "topola", "swierk", "baobab", "fantazja" };
 
+extern enum transfer_types;
+
 unsigned long __log2(unsigned long x)  // w starszej wersji Visuala (< 2013) nie ma funkcji log2() w bibliotece math.h  !!!
 {
 	long i = -1;
@@ -719,6 +721,7 @@ void MovableObject::Simulation(float dt)          // obliczenie nowego stanu na 
 
 				// SaveMapToFile informacji, by przekazaæ j¹ innym aplikacjom:
 				number_of_taking_item = prz->index;
+				resource_type = prz->type;
 			}
 		}
 	} // po przedmiotach w radiusiu

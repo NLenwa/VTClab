@@ -4,6 +4,7 @@
 
 #define PI 3.1416
 extern class Terrain;
+extern enum transfer_types;
 
 struct ObjectState
 {
@@ -64,7 +65,7 @@ public:
 	long number_of_taking_item;   // numer wzietego przedmiotu
 	float taking_value;   // value wzietego przedmiotu
 	long number_of_renewed_item;
-
+	int resource_type;
 
 	float time_of_simulation;     // czas sumaryczny symulacji obiektu   
 	Terrain *terrain;             // wskaŸnik do terrainu, do którego przypisany jest obiekt

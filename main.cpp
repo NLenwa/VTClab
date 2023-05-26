@@ -12,6 +12,8 @@
 #include <gl\glu.h>
 #include <iterator> 
 #include <map>
+#include <string>
+#include <iostream>
 using namespace std;
 
 #include "objects.h"
@@ -343,6 +345,13 @@ void VirtualWorldCycle()
 		frame.state = my_vehicle->State();
 		frame.iID = my_vehicle->iID;
 		int iRozmiar = multi_send->send((char*)&frame, sizeof(Frame));
+
+		if (partnered)
+		{
+			float res_amount = my_vehicle->taking_value * 0.5;
+			TransferSending(partner, my_vehicle->resource_type, res_amount);
+		}
+
 
 		sprintf(par_view.inscription2, "Wziecie_przedmiotu_o_wartosci_ %f", my_vehicle->taking_value);
 
