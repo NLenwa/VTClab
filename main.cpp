@@ -19,6 +19,29 @@ using namespace std;
 #include "net.h"
 
 
+// VTC Task 2.2
+// bidding variables
+bool bid_on = false;			// bool var to truck bidding process
+bool bid_check = false;			// bool var to finilize starting bidding value
+bool is_my_bid = false;
+
+int bid_start_id = 0;			// id of user that init the bid
+int bid_start = 0;				// initial bid value
+int bid_start_val = 0;			// initial global bid value
+int bid_val = 0;				// current bid value
+int my_bid = 0;					// user own bid value
+int digit_counter = 0;			// digit counter up to 3 digits - 0, 1, 2
+int current_bidder = 0;			// current bidder id
+
+bool clock_setup = false;
+long bid_start_time;				// starting value of bid time
+
+
+// cooperation variables
+bool partnered = false;			// is or is not partnered with other user
+int partner = 0;				// partner id
+
+
 bool if_different_skills = true;          // czy zró¿nicowanie umiejêtnoœci (dla ka¿dego pojazdu losowane s¹ umiejêtnoœci
 // zbierania gotówki i paliwa)
 
@@ -56,8 +79,19 @@ int cursor_x, cursor_y;                         // polo¿enie kursora myszki w c
 
 extern float TransferSending(int ID_receiver, int transfer_type, float transfer_value);
 
+extern void BidStart();
+extern void SendBidStart();
+extern void BidAmount(int x);
+extern void Bid(int x); 
+extern void SendBid();
+extern void RecBidStart(int bid_id, int amount);
+extern void RecBid(int bid_id, int bidder_id, int amount);
+extern void BidEnd();
+extern void SendBidEnd();
+extern void BidTimer();
+
 enum frame_types {
-	OBJECT_STATE, ITEM_TAKING, ITEM_RENEWAL, COLLISION, TRANSFER
+	OBJECT_STATE, ITEM_TAKING, ITEM_RENEWAL, COLLISION, TRANSFER, BIDSTART, BID, BIDEND
 };
 
 enum transfer_types { MONEY, FUEL};
@@ -79,6 +113,13 @@ struct Frame
 	int team_number;
 
 	long existing_time;        // czas jaki uplyn¹³ od uruchomienia programu
+
+	// Bidding Frame variables
+	int bid;
+	int bid_ID;
+	int bid_winner;
+	int bid_init_val;
+	bool bid_end;
 };
 
 
@@ -175,7 +216,35 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 			}
 			break;
 		}
-		
+		case BIDSTART:
+		{
+			if (frame.iID != my_vehicle->iID)
+			{
+				RecBidStart(frame.bid_ID, frame.bid_init_val);
+			}
+		}
+		case BID:
+		{
+			if (frame.iID != my_vehicle->iID && frame.bid_ID == bid_start_id)
+			{
+				RecBid(frame.bid_ID, frame.iID, frame.bid);
+			}
+		}
+		case BIDEND:
+		{
+			if (frame.iID != my_vehicle->iID)
+			{
+				if (frame.bid_winner == my_vehicle->iID)
+				{
+					// Code for creating a partnership
+					//************
+
+				}
+				BidEnd();
+			}
+		}
+
+
 		} // switch po typach ramek
 		// Opuszczenie ścieżki krytycznej / Release the Critical section
 		LeaveCriticalSection(&m_cs);               // wyjście ze ścieżki krytycznej
@@ -337,8 +406,164 @@ float TransferSending(int ID_receiver, int transfer_type, float transfer_value)
 	return frame.transfer_value;
 }
 
+// VTC Task 2.2 functions
+void BidClockInit()
+{
+	if (!clock_setup && bid_start_id == my_vehicle->iID)
+	{
+		bid_start_time = clock();
+	}
+}
+
+void BidTimer()
+{
+	long phase_clock = clock();
+	long time_diff = (phase_clock - bid_start_time) / (long)CLOCKS_PER_SEC;
+	if (time_diff >= 30)
+	{
+		SendBidEnd();
+	}
+}
 
 
+// Initial bid amount
+void BidAmount(int x)
+{
+	if (digit_counter < 2)
+	{
+		bid_start = bid_start * 10 + x;
+	}
+}
+// BidStart message:
+void BidStartMsg()
+{
+	// Display first bidding message
+	if (digit_counter == 0)
+	{
+		//****************
+	}
+	else if (bid_check == false && digit_counter != 2)
+	{
+		// message with current sum
+	}
+}
+
+// Bidding init
+void BidStart()
+{
+	if (bid_on)
+	{
+		// When bool bid_on is true no new bid can start
+		// Display message:
+		// ***********
+	}
+	else
+	{
+		// Display message:
+		BidStartMsg();
+	}
+}
+
+// send bid to other users
+void SendBidStart()
+{
+	Frame frame;
+	frame.iID = my_vehicle->iID;
+	frame.bid_ID = my_vehicle->iID;
+	frame.bid_init_val = bid_start;
+	frame.frame_type = BIDSTART;
+	
+	multi_send->send((char*)&frame, sizeof(Frame));
+}
+
+// Receive info about starting of the bid from frame of frame type BIDSTART
+void RecBidStart(int bid_id, int amount)
+{
+	bid_start_id = bid_id;
+	current_bidder = 0;
+	bid_val = amount;
+	bid_start_val = amount;
+
+}
+
+// Set up bidding by user
+void Bid(int x)
+{
+	// If can bid
+	if (bid_on && !is_my_bid && current_bidder != my_vehicle->iID)
+	{
+		// bid according to NUM key, '7'-> +5, '8'-> +10, '9'-> +20
+		my_bid = bid_val + x;
+		SendBid();
+	}
+	else
+	{
+		// Display message: not enough money to bid
+		// *****
+	}
+}
+
+// Send bid value
+void SendBid()
+{
+	// Send Bid frame if can afford to bid
+	if (my_bid > bid_val && my_bid <= my_vehicle->state.money)
+	{
+		Frame frame;
+
+		frame.iID = my_vehicle->iID;
+		frame.bid_ID = bid_start_id;
+		frame.bid = my_bid;
+		frame.frame_type = BID;
+
+		multi_send->send((char*)&frame, sizeof(Frame));
+	}
+
+	// Clear bid value
+	my_bid = 0;
+}
+
+// Receive bid from frame of frame_type BIDSEND
+void RecBid(int bid_id, int bidder_id, int amount)
+{
+	if (bid_id == bid_start_id)
+	{
+		current_bidder = bidder_id;
+		bid_val = amount;
+	}
+
+}
+
+// Send info about winner of the bid
+void SendBidEnd()
+{
+	if (is_my_bid)
+	{
+		// Set partner - winner of the bid
+		partnered = true;
+		partner = current_bidder;
+
+		Frame frame;
+		frame.iID = my_vehicle->iID;
+		frame.bid_ID = bid_start_id;
+		frame.bid_winner = current_bidder;
+		frame.frame_type = BIDEND;
+
+		multi_send->send((char*)&frame, sizeof(Frame));
+	}
+}
+
+// Run when bid is ended
+void BidEnd()
+{
+	// Perform cleaning of variables value:
+	bid_on = false;
+	is_my_bid = false;
+	bid_check = false;
+	bid_start = 0;
+	bid_start_val = 0;
+	my_bid = 0;
+}
 
 
 //deklaracja funkcji obslugi okna
@@ -753,11 +978,93 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
+		case 'U':
+		{
+			BidStart();
+		}
 		
 		case 'L':     // rozpoczęcie zaznaczania metodą lasso
 			L_pressed = true;
 			break;
-	
+		
+		case 'NUM1':
+		{
+			{
+				BidAmount(1);
+			}
+			break;
+		}
+		case 'NUM2':
+		{
+			{
+				BidAmount(2);
+			}
+			break;
+		}
+		case 'NUM3':
+		{
+			{
+				BidAmount(3);
+			}
+			break;
+		}
+		case 'NUM4':
+		{
+			{
+				BidAmount(4);
+			}
+			break;
+		}
+		case 'NUM5':
+		{
+			{
+				BidAmount(5);
+			}
+			break;
+		}
+		case 'NUM6':
+		{
+			{
+				BidAmount(6);
+			}
+			break;
+		}
+		case 'NUM7':
+		{
+			if (is_my_bid)
+			{
+				BidAmount(7);
+			}
+			else
+			{
+				Bid(5);
+			}
+			break;
+		}
+		case 'NUM8':
+		{
+			if (is_my_bid)
+			{
+				BidAmount(8);
+			}
+			else
+			{
+				Bid(10);
+			}
+			break;
+		}
+		case 'NUM9':
+		{
+			if (is_my_bid)
+			{
+				BidAmount(9);
+			}
+			else
+			{
+				Bid(20);
+			}
+			break;
+		}
 
 		} // switch po klawiszach
 
