@@ -24,7 +24,7 @@ using namespace std;
 // VTC Task 2.2
 // bidding variables
 bool bid_on = false;			// bool var to truck bidding process
-bool bid_check = false;			// bool var to finilize starting bidding value
+bool bid_check = false;
 bool is_my_bid = false;
 
 int bid_start_id = 0;			// id of user that init the bid
@@ -34,6 +34,7 @@ int bid_val = 0;				// current bid value
 int my_bid = 0;					// user own bid value
 int digit_counter = 0;			// digit counter up to 3 digits - 0, 1, 2
 int current_bidder = 0;			// current bidder id
+int winner_bid = 0;
 
 bool clock_setup = false;
 long bid_start_time;				// starting value of bid time
@@ -91,6 +92,7 @@ extern void RecBid(int bid_id, int bidder_id, int amount);
 extern void BidEnd();
 extern void SendBidEnd();
 extern void BidTimer();
+extern void BidClockInit();
 
 enum frame_types {
 	OBJECT_STATE, ITEM_TAKING, ITEM_RENEWAL, COLLISION, TRANSFER, BIDSTART, BID, BIDEND
@@ -239,8 +241,8 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 				if (frame.bid_winner == my_vehicle->iID)
 				{
 					// Code for creating a partnership
-					//************
-
+					partner = bid_start_id;
+					partnered = true;
 				}
 				BidEnd();
 			}
@@ -289,6 +291,13 @@ void InteractionInitialisation()
 void VirtualWorldCycle()
 {
 	counter_of_simulations++;
+	
+	if (bid_on)
+	{
+		BidClockInit();
+		BidTimer();
+	}
+
 
 	// obliczenie œredniego czasu pomiêdzy dwoma kolejnnymi symulacjami po to, by zachowaæ  fizycznych 
 	if (counter_of_simulations % 50 == 0)          // jeœli licznik cykli przekroczy³ pewn¹ wartoœæ, to
@@ -421,6 +430,7 @@ void BidClockInit()
 	if (!clock_setup && bid_start_id == my_vehicle->iID)
 	{
 		bid_start_time = clock();
+
 	}
 }
 
@@ -428,6 +438,8 @@ void BidTimer()
 {
 	long phase_clock = clock();
 	long time_diff = (phase_clock - bid_start_time) / (long)CLOCKS_PER_SEC;
+	sprintf(par_view.inscription3, "| Bidding time: %0.0f / 30 ", (float)time_diff);
+	
 	if (time_diff >= 30)
 	{
 		SendBidEnd();
@@ -441,6 +453,8 @@ void BidAmount(int x)
 	if (digit_counter < 2)
 	{
 		bid_start = bid_start * 10 + x;
+		digit_counter++;
+		BidStartMsg();
 	}
 }
 // BidStart message:
@@ -449,11 +463,12 @@ void BidStartMsg()
 	// Display first bidding message
 	if (digit_counter == 0)
 	{
-		//****************
+		sprintf(par_view.inscription3, "| Provide initial bid amount with NUM1-9.");
 	}
-	else if (bid_check == false && digit_counter != 2)
+	else if (digit_counter != 2)
 	{
 		// message with current sum
+		sprintf(par_view.inscription3, "| Current amount: %d. Press O to confirm.", bid_start);
 	}
 }
 
@@ -464,7 +479,7 @@ void BidStart()
 	{
 		// When bool bid_on is true no new bid can start
 		// Display message:
-		// ***********
+		sprintf(par_view.inscription3, "| Bid in progress! Wait for end");
 	}
 	else
 	{
@@ -483,6 +498,8 @@ void SendBidStart()
 	frame.frame_type = BIDSTART;
 	
 	multi_send->send((char*)&frame, sizeof(Frame));
+	sprintf(par_view.inscription3, "| Bid initialized!");
+	bid_on = true;
 }
 
 // Receive info about starting of the bid from frame of frame type BIDSTART
@@ -492,7 +509,7 @@ void RecBidStart(int bid_id, int amount)
 	current_bidder = 0;
 	bid_val = amount;
 	bid_start_val = amount;
-
+	bid_on = true;
 }
 
 // Set up bidding by user
@@ -507,8 +524,7 @@ void Bid(int x)
 	}
 	else
 	{
-		// Display message: not enough money to bid
-		// *****
+		sprintf(par_view.inscription3, "| Cannot bid! Not enough coins");
 	}
 }
 
@@ -526,6 +542,7 @@ void SendBid()
 		frame.frame_type = BID;
 
 		multi_send->send((char*)&frame, sizeof(Frame));
+		sprintf(par_view.inscription3, "| Bid sent: %d coins", winner_bid);
 	}
 
 	// Clear bid value
@@ -539,6 +556,7 @@ void RecBid(int bid_id, int bidder_id, int amount)
 	{
 		current_bidder = bidder_id;
 		bid_val = amount;
+		sprintf(par_view.inscription3, "| New bid: %d coins by user: %d", bid_val, current_bidder);
 	}
 
 }
@@ -565,10 +583,10 @@ void SendBidEnd()
 // Run when bid is ended
 void BidEnd()
 {
+	sprintf(par_view.inscription3, " Bid ended. Winner: %d,", winner_bid);
 	// Perform cleaning of variables value:
 	bid_on = false;
 	is_my_bid = false;
-	bid_check = false;
 	bid_start = 0;
 	bid_start_val = 0;
 	my_bid = 0;
@@ -989,56 +1007,63 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 		}
 		case 'U':
 		{
+			bid_check = true;
 			BidStart();
+			break;
 		}
-		
+		case 'I':
+		{
+			SendBidStart();
+			break;
+		}
 		case 'L':     // rozpoczęcie zaznaczania metodą lasso
+		{
 			L_pressed = true;
 			break;
-		
-		case 'NUM1':
+		}
+		case VK_NUMPAD1:
 		{
 			{
 				BidAmount(1);
 			}
 			break;
 		}
-		case 'NUM2':
+		case VK_NUMPAD2:
 		{
 			{
 				BidAmount(2);
 			}
 			break;
 		}
-		case 'NUM3':
+		case VK_NUMPAD3:
 		{
 			{
 				BidAmount(3);
 			}
 			break;
 		}
-		case 'NUM4':
+		case VK_NUMPAD4:
 		{
 			{
 				BidAmount(4);
 			}
 			break;
 		}
-		case 'NUM5':
+		case VK_NUMPAD5:
 		{
 			{
 				BidAmount(5);
 			}
 			break;
 		}
-		case 'NUM6':
+		case VK_NUMPAD6:
 		{
 			{
 				BidAmount(6);
 			}
 			break;
 		}
-		case 'NUM7':
+		case VK_NUMPAD7:
 		{
 			if (is_my_bid)
 			{
@@ -1050,7 +1075,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
-		case 'NUM8':
+		case VK_NUMPAD8:
 		{
 			if (is_my_bid)
 			{
@@ -1062,7 +1087,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
-		case 'NUM9':
+		case VK_NUMPAD9:
 		{
 			if (is_my_bid)
 			{
