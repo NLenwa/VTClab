@@ -1111,7 +1111,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				Bid(1);
+				Bid(0.5);
 			}
 			break;
 		}
@@ -1123,7 +1123,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				Bid(2);
+				Bid(1);
 			}
 			break;
 		}
@@ -1135,7 +1135,7 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				Bid(10);
+				Bid(2);
 			}
 			break;
 		}
