@@ -29,15 +29,15 @@ bool is_my_bid = false;
 
 int bid_start_id = 0;			// id of user that init the bid
 int bid_start = 0;				// initial bid value
-int bid_start_val = 0;			// initial global bid value
-int bid_val = 0;				// current bid value
-int my_bid = 0;					// user own bid value
+float bid_share = 0;			// share to bid on
+float bid_val = 0;				// current bid value
+float my_bid = 0;					// user own bid value
 int digit_counter = 0;			// digit counter up to 3 digits - 0, 1, 2
 int current_bidder = 0;			// current bidder id
-int winner_bid = 0;
 
 bool clock_setup = false;
 long bid_start_time;				// starting value of bid time
+float res_share = 0;
 
 
 // cooperation variables
@@ -84,15 +84,16 @@ extern float TransferSending(int ID_receiver, int transfer_type, float transfer_
 
 extern void BidStart();
 extern void SendBidStart();
-extern void BidAmount(int x);
-extern void Bid(int x); 
+extern void BidAmount(float x);
+extern void Bid(float x); 
 extern void SendBid();
-extern void RecBidStart(int bid_id, int amount);
-extern void RecBid(int bid_id, int bidder_id, int amount);
+extern void RecBidStart(int bid_id, float amount);
+extern void RecBid(int bid_id, int bidder_id, float amount);
 extern void BidEnd();
 extern void SendBidEnd();
 extern void BidTimer();
 extern void BidClockInit();
+extern void BidStartMsg();
 
 enum frame_types {
 	OBJECT_STATE, ITEM_TAKING, ITEM_RENEWAL, COLLISION, TRANSFER, BIDSTART, BID, BIDEND
@@ -119,11 +120,10 @@ struct Frame
 	long existing_time;        // czas jaki uplyn¹³ od uruchomienia programu
 
 	// Bidding Frame variables
-	int bid;
+	float bid;
 	int bid_ID;
 	int bid_winner;
-	int bid_init_val;
-	bool bid_end;
+	float bid_share;
 };
 
 
@@ -224,15 +224,17 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 		{
 			if (frame.iID != my_vehicle->iID)
 			{
-				RecBidStart(frame.bid_ID, frame.bid_init_val);
+				RecBidStart(frame.bid_ID, frame.bid_share);
 			}
+			break;
 		}
 		case BID:
 		{
-			if (frame.iID != my_vehicle->iID && frame.bid_ID == bid_start_id)
+			if (frame.iID != my_vehicle->iID)
 			{
 				RecBid(frame.bid_ID, frame.iID, frame.bid);
 			}
+			break;
 		}
 		case BIDEND:
 		{
@@ -240,11 +242,12 @@ DWORD WINAPI ReceiveThreadFunction(void *ptr)
 			{
 				if (frame.bid_winner == my_vehicle->iID)
 				{
-					// Code for creating a partnership
-					partner = bid_start_id;
-					partnered = true;
+					int r_t = FUEL;
+					TransferSending(bid_start_id,r_t, bid_val);
+					sprintf(par_view.inscription5, "|_You_receive_%0.0f_percent_money_share_from_%d", bid_share, bid_start_id);
 				}
 				BidEnd();
+				break;
 			}
 		}
 
@@ -295,9 +298,8 @@ void VirtualWorldCycle()
 	if (bid_on)
 	{
 		BidClockInit();
-		BidTimer();
 	}
-
+	BidTimer();
 
 	// obliczenie œredniego czasu pomiêdzy dwoma kolejnnymi symulacjami po to, by zachowaæ  fizycznych 
 	if (counter_of_simulations % 50 == 0)          // jeœli licznik cykli przekroczy³ pewn¹ wartoœæ, to
@@ -357,8 +359,17 @@ void VirtualWorldCycle()
 
 		if (partnered)
 		{
-			float res_amount = my_vehicle->taking_value * 0.5;
-			TransferSending(partner, my_vehicle->resource_type, res_amount);
+			int res_type = my_vehicle->resource_type;
+			if (res_type == MONEY)
+			{
+			sprintf(par_view.inscription4, "MOOONEY");
+				float res_amount = my_vehicle->taking_value * res_share;
+				TransferSending(partner, res_type, res_amount);
+			}
+			if (res_type == FUEL)
+			{
+				sprintf(par_view.inscription4, "FUEEL");
+			}
 		}
 
 
@@ -427,32 +438,42 @@ float TransferSending(int ID_receiver, int transfer_type, float transfer_value)
 // VTC Task 2.2 functions
 void BidClockInit()
 {
-	if (!clock_setup && bid_start_id == my_vehicle->iID)
+	if (!clock_setup)
 	{
 		bid_start_time = clock();
-
+		clock_setup = true;
 	}
 }
 
 void BidTimer()
 {
-	long phase_clock = clock();
-	long time_diff = (phase_clock - bid_start_time) / (long)CLOCKS_PER_SEC;
-	sprintf(par_view.inscription3, "| Bidding time: %0.0f / 30 ", (float)time_diff);
+	long phase_clock = 0;
+	long time_diff = 0;
+	if (bid_on && time_diff <= 30)
+	{
+		phase_clock = clock();
+	}
+	time_diff = (phase_clock - bid_start_time) / (long)CLOCKS_PER_SEC;
+	sprintf(par_view.inscription3, "| Bidding_time: %0.0f / 30 ", (float)time_diff);
 	
-	if (time_diff >= 30)
+	if (time_diff >= 30 && is_my_bid)
 	{
 		SendBidEnd();
+
+	}
+	if (time_diff >= 30)
+	{
+		bid_start_time = 0;
 	}
 }
 
 
 // Initial bid amount
-void BidAmount(int x)
+void BidAmount(float x)
 {
-	if (digit_counter < 2)
+	if (digit_counter <= 1)
 	{
-		bid_start = bid_start * 10 + x;
+		bid_share = bid_share * 10 + x;
 		digit_counter++;
 		BidStartMsg();
 	}
@@ -463,12 +484,12 @@ void BidStartMsg()
 	// Display first bidding message
 	if (digit_counter == 0)
 	{
-		sprintf(par_view.inscription3, "| Provide initial bid amount with NUM1-9.");
+		sprintf(par_view.inscription4, "|_Provide_initial_bid_amount_with_NUM0-9.");
 	}
-	else if (digit_counter != 2)
+	else
 	{
 		// message with current sum
-		sprintf(par_view.inscription3, "| Current amount: %d. Press O to confirm.", bid_start);
+		sprintf(par_view.inscription4, "|_Current_percent_share:_%0.0f._Press_I_to_confirm.", bid_share);
 	}
 }
 
@@ -479,7 +500,7 @@ void BidStart()
 	{
 		// When bool bid_on is true no new bid can start
 		// Display message:
-		sprintf(par_view.inscription3, "| Bid in progress! Wait for end");
+		sprintf(par_view.inscription4, "|_Bid_in_progress!_Wait_for_end");
 	}
 	else
 	{
@@ -494,37 +515,40 @@ void SendBidStart()
 	Frame frame;
 	frame.iID = my_vehicle->iID;
 	frame.bid_ID = my_vehicle->iID;
-	frame.bid_init_val = bid_start;
+	frame.bid_share = bid_share;
 	frame.frame_type = BIDSTART;
 	
 	multi_send->send((char*)&frame, sizeof(Frame));
-	sprintf(par_view.inscription3, "| Bid initialized!");
+	sprintf(par_view.inscription4, "|_Bid_initialized!");
 	bid_on = true;
+	is_my_bid = true;
 }
 
 // Receive info about starting of the bid from frame of frame type BIDSTART
-void RecBidStart(int bid_id, int amount)
+void RecBidStart(int bid_id, float amount)
 {
-	bid_start_id = bid_id;
 	current_bidder = 0;
-	bid_val = amount;
-	bid_start_val = amount;
+	bid_val = 0;
+	bid_start_id = bid_id;
+	bid_share = amount;
 	bid_on = true;
+	sprintf(par_view.inscription4, "|Bid_init_by:_%d_for_%0.1f_percent_Money_share", bid_start_id, bid_share);
+
 }
 
 // Set up bidding by user
-void Bid(int x)
+void Bid(float x)
 {
 	// If can bid
-	if (bid_on && !is_my_bid && current_bidder != my_vehicle->iID)
+	if (bid_on && !bid_check && current_bidder != my_vehicle->iID)
 	{
-		// bid according to NUM key, '7'-> +5, '8'-> +10, '9'-> +20
+		// bid according to NUM key, '7'-> +0.5, '8'-> +1, '9'-> +2
 		my_bid = bid_val + x;
 		SendBid();
 	}
 	else
 	{
-		sprintf(par_view.inscription3, "| Cannot bid! Not enough coins");
+		sprintf(par_view.inscription4, "|_Cannot_bid!");
 	}
 }
 
@@ -532,7 +556,7 @@ void Bid(int x)
 void SendBid()
 {
 	// Send Bid frame if can afford to bid
-	if (my_bid > bid_val && my_bid <= my_vehicle->state.money)
+	if (my_bid > bid_val && my_bid <= my_vehicle->state.amount_of_fuel)
 	{
 		Frame frame;
 
@@ -542,7 +566,9 @@ void SendBid()
 		frame.frame_type = BID;
 
 		multi_send->send((char*)&frame, sizeof(Frame));
-		sprintf(par_view.inscription3, "| Bid sent: %d coins", winner_bid);
+		sprintf(par_view.inscription4, "|_Bid_sent:_%0.0f_FUEL_units", my_bid);
+		current_bidder = my_vehicle->iID;
+		bid_val = my_bid;
 	}
 
 	// Clear bid value
@@ -550,21 +576,25 @@ void SendBid()
 }
 
 // Receive bid from frame of frame_type BIDSEND
-void RecBid(int bid_id, int bidder_id, int amount)
+void RecBid(int bid_id, int bidder_id, float amount)
 {
-	if (bid_id == bid_start_id)
-	{
-		current_bidder = bidder_id;
-		bid_val = amount;
-		sprintf(par_view.inscription3, "| New bid: %d coins by user: %d", bid_val, current_bidder);
-	}
+	current_bidder = bidder_id;
+	bid_val = amount;
+	sprintf(par_view.inscription4, "|_New_bid:_%0.0f_Fuel_units_by_user:_%d", bid_val, current_bidder);
+	
+//	if (bid_id == bid_start_id)
+//	{
+//		current_bidder = bidder_id;
+//		bid_val = amount;
+//		sprintf(par_view.inscription4, "|_New_bid:_%f_Fuel_units_by_user:_%d", bid_val, current_bidder);
+//	}
 
 }
 
 // Send info about winner of the bid
 void SendBidEnd()
 {
-	if (is_my_bid)
+	if (bid_check)
 	{
 		// Set partner - winner of the bid
 		partnered = true;
@@ -577,18 +607,21 @@ void SendBidEnd()
 		frame.frame_type = BIDEND;
 
 		multi_send->send((char*)&frame, sizeof(Frame));
+		res_share = bid_share / 100;
+		sprintf(par_view.inscription5, "|%0.0f_percent_of_money_goes_to:%d", bid_share, current_bidder);
+		BidEnd();
 	}
 }
 
 // Run when bid is ended
 void BidEnd()
 {
-	sprintf(par_view.inscription3, " Bid ended. Winner: %d,", winner_bid);
+	sprintf(par_view.inscription4, "| Bid_ended._Winner: %d,", current_bidder);
 	// Perform cleaning of variables value:
 	bid_on = false;
-	is_my_bid = false;
+	bid_check;
 	bid_start = 0;
-	bid_start_val = 0;
+	bid_share = 0;
 	my_bid = 0;
 }
 
@@ -1013,7 +1046,14 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 		}
 		case 'I':
 		{
-			SendBidStart();
+			if (!partnered && !bid_on)
+			{
+				SendBidStart();
+			}
+			else
+			{
+				sprintf(par_view.inscription4, "|Cannot start bidding!");
+			}
 			break;
 		}
 		case 'L':     // rozpoczęcie zaznaczania metodą lasso
@@ -1065,21 +1105,33 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 		}
 		case VK_NUMPAD7:
 		{
-			if (is_my_bid)
+			if (bid_check)
 			{
 				BidAmount(7);
 			}
 			else
 			{
-				Bid(5);
+				Bid(1);
 			}
 			break;
 		}
 		case VK_NUMPAD8:
 		{
-			if (is_my_bid)
+			if (bid_check)
 			{
 				BidAmount(8);
+			}
+			else
+			{
+				Bid(2);
+			}
+			break;
+		}
+		case VK_NUMPAD9:
+		{
+			if (bid_check)
+			{
+				BidAmount(9);
 			}
 			else
 			{
@@ -1087,18 +1139,15 @@ void MessagesHandling(UINT message_type, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
-		case VK_NUMPAD9:
+		case VK_NUMPAD0:
 		{
-			if (is_my_bid)
+			if (digit_counter != 0)
 			{
-				BidAmount(9);
-			}
-			else
-			{
-				Bid(20);
+				BidAmount(0);
 			}
 			break;
 		}
+
 
 		} // switch po klawiszach
 

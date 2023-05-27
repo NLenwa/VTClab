@@ -148,6 +148,8 @@ void DrawScene()
 	glPrint("%s", par_view.inscription1);
 	glPrint("%s", par_view.inscription2);
 	glPrint("%s", par_view.inscription3);
+	glPrint("%s", par_view.inscription4);
+	glPrint("%s", par_view.inscription5);
 	glLoadIdentity();
 
 
