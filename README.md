@@ -1,4 +1,4 @@
 # VTClab
-Virtual Team Collaboration - Laboratory tasks
+Virtual Team Collaboration - Laboratory tasks.
 Base code
-see branches for two different tasks
+- see branches for two different tasks
